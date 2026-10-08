@@ -1,0 +1,20 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "outputDirectory": "public",
+  "regions": ["cdg1"],
+  "functions": {
+    "api/scan.js": {
+      "maxDuration": 120
+    },
+    "api/telegram.js": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/scan",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}
