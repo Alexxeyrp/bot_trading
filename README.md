@@ -372,3 +372,5 @@ Con la integración Git, Vercel desplegará la rama de producción. Redis conser
 ## Estado de la preparación
 
 Código y pruebas preparados; deployment, creación de Redis y registro del webhook deben realizarse manualmente. No se han hecho commit, push ni deployment, ni se han utilizado credenciales reales para tests. La instalación, sintaxis, dependencias y arranque local se verifican en el entorno de desarrollo; la primera ejecución real en Vercel verifica conectividad y credenciales de Production.
+#   b o t _ t r a d i n g  
+ 
