@@ -56,6 +56,7 @@ export function loadConfig(env = process.env) {
     minPatternSeparation: number(env.MIN_PATTERN_SEPARATION, 5, 'MIN_PATTERN_SEPARATION', 2, 100),
     pivotWindow: number(env.PIVOT_WINDOW, 2, 'PIVOT_WINDOW', 1, 20),
     cooldownSeconds: number(env.ALERT_COOLDOWN_SECONDS, 3600, 'ALERT_COOLDOWN_SECONDS', 1, 86400),
+    maxSignalAgeCandles: number(env.MAX_SIGNAL_AGE_CANDLES, 2, 'MAX_SIGNAL_AGE_CANDLES', 1, 100),
     signalRetentionSeconds: 90 * 86400, debugPatterns: boolean(env.DEBUG_PATTERNS, false, 'DEBUG_PATTERNS'),
     logLevel: ['error', 'warn', 'info', 'debug'].includes(env.LOG_LEVEL) ? env.LOG_LEVEL : 'info',
     cronSecret: env.CRON_SECRET ?? '',

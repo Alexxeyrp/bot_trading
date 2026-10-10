@@ -19,6 +19,8 @@ for (const path of ['src', 'api', 'scripts', 'tests'].flatMap(walk)) {
 const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
 const vercel = JSON.parse(readFileSync('vercel.json', 'utf8'));
 if (manifest.type !== 'module' || manifest.engines.node !== '22.x' || vercel.crons[0].path !== '/api/scan'
-  || vercel.crons[0].schedule !== '0 8 * * *') failures++;
+  || vercel.crons[0].schedule !== '0 8 * * *' || vercel.framework !== null
+  || vercel.buildCommand !== '' || vercel.installCommand !== 'npm ci' || vercel.fluid !== true
+  || vercel.outputDirectory !== 'public') failures++;
 console.info(failures ? `Comprobación fallida: ${failures}` : 'Sintaxis, imports, ES Modules y configuración Vercel correctos.');
 process.exitCode = failures ? 1 : 0;

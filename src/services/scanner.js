@@ -5,6 +5,7 @@ import config from '../config.js';
 import logger from '../utils/logger.js';
 import { validateCandles } from '../utils/priceUtils.js';
 import { getCandles } from '../marketData/index.js';
+import { candleCloseTime } from '../marketData/helpers.js';
 import { sendMessage } from './telegram.js';
 import { storage, signalIdentity } from './storage.js';
 
@@ -18,7 +19,12 @@ export function formatAlert(settings, result, confirmation) {
     `📈 Patrón: ${result.pattern}`, `🎯 Confianza: ${result.confidence}%`, '',
     `🕐 Confirmación: ${new Date(confirmation * 1000).toISOString().replace('T', ' ').replace('.000Z', ' UTC')}`].join('\n');
 }
-export async function scan({ store = storage, market = getCandles, send = sendMessage, patterns = detectors } = {}) {
+export function signalExpiresAt(confirmation, timeframe, maxAgeCandles = config.maxSignalAgeCandles) {
+  let expiresAt = confirmation;
+  for (let i = 0; i < maxAgeCandles; i++) expiresAt = candleCloseTime(expiresAt, timeframe);
+  return expiresAt;
+}
+export async function scan({ store = storage, market = getCandles, send = sendMessage, patterns = detectors, now = Date.now } = {}) {
   const initial = await store.getSettings();
   if (!initial.active) {
     logger.info('Scanner inactivo; invocación omitida');
@@ -29,7 +35,7 @@ export async function scan({ store = storage, market = getCandles, send = sendMe
     logger.info('Scanner ocupado; invocación omitida');
     return { status: 'busy', sent: 0 };
   }
-  const summary = { status: 'completed', at: new Date().toISOString(), sent: 0, detected: 0, duplicates: 0, errors: 0 };
+  const summary = { status: 'completed', at: new Date(now()).toISOString(), sent: 0, detected: 0, duplicates: 0, expired: 0, errors: 0 };
   try {
     const settings = await store.getSettings();
     if (!settings.active) return { status: 'inactive', sent: 0 };
@@ -46,7 +52,7 @@ export async function scan({ store = storage, market = getCandles, send = sendMe
     }
     for (const { id, name, detect } of patterns) {
       if (!settings.patterns[id]) continue;
-      let result;
+      let result, confirmation, expiresAt;
       try {
         result = detect(candles);
         if (!result.detected) continue;
@@ -54,6 +60,12 @@ export async function scan({ store = storage, market = getCandles, send = sendMe
         logger.info(`Patrón encontrado: ${name}, confianza=${result.confidence}`);
         if (!Number.isFinite(result.confidence) || result.confidence < settings.minConfidence || result.confidence > 100) continue;
         if (!Number.isInteger(result.breakoutIndex) || !candles[result.breakoutIndex]) throw new Error('Confirmación inválida');
+        const candle = candles[result.breakoutIndex];
+        confirmation = candle.closeTimestamp ?? candleCloseTime(candle.timestamp, settings.timeframe);
+        if (!Number.isFinite(confirmation) || confirmation <= candle.timestamp || confirmation * 1000 > now()) {
+          throw new Error('Fecha de confirmación inválida');
+        }
+        expiresAt = signalExpiresAt(confirmation, settings.timeframe);
       } catch {
         summary.errors++;
         logger.error(`Error en detector: ${name}`);
@@ -65,10 +77,19 @@ export async function scan({ store = storage, market = getCandles, send = sendMe
         break;
       }
       if (!current.patterns[id] || result.confidence < current.minConfidence) continue;
-      const confirmation = candles[result.breakoutIndex].closeTimestamp ?? candles[result.breakoutIndex].timestamp;
+      if (now() > expiresAt * 1000) {
+        summary.expired++;
+        logger.info(`Señal caducada omitida: ${name}`);
+        continue;
+      }
       const identity = signalIdentity(settings, { pattern: name }, confirmation);
       const reservation = await store.reserveAlert(identity, `${settings.symbol}|${settings.timeframe}|${name}`, confirmation);
       if (!reservation) { summary.duplicates++; continue; }
+      if (now() > expiresAt * 1000) {
+        await store.cancelAlert(reservation);
+        summary.expired++;
+        continue;
+      }
       try {
         await send(formatAlert(settings, { ...result, pattern: name }, confirmation));
       } catch (error) {

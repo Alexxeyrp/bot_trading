@@ -123,6 +123,7 @@ La confianza es una puntuación heurística del detector, no una probabilidad de
 | `ENABLED_PATTERNS` | `doublebottom,doubletop,ascendingtriangle`; vacío deshabilita todos inicialmente. |
 | `MIN_CANDLES` / `CANDLE_LIMIT` | `50` / `200`; se descarta la vela abierta, por eso el límite debe superar el mínimo. Máximo 1000. |
 | `ALERT_COOLDOWN_SECONDS` | `3600`, por activo/timeframe/patrón. |
+| `MAX_SIGNAL_AGE_CANDLES` | `2`, entero de 1 a 100. Vigencia máxima desde el cierre de la vela de confirmación, medida en duraciones de la temporalidad actual. |
 | `DOUBLE_BOTTOM_TOLERANCE` / `DOUBLE_TOP_TOLERANCE` / `TRIANGLE_TOLERANCE` | `0.02`. |
 | `BREAKOUT_CONFIRMATION_PERCENT` | `0.001`. |
 | `MIN_PATTERN_SEPARATION` / `PIVOT_WINDOW` | `5` / `2`. |
@@ -220,7 +221,7 @@ Comprueba antes del commit que `.env`, tokens y claves no aparecen entre los arc
 ### 5. Importar en Vercel
 
 1. Abre **Vercel → Add New → Project** e importa el repositorio.
-2. Elige **Framework Preset: Other**.
+2. Elige **Framework Preset: Other**. `vercel.json` fija `framework: null`, build vacío, instalación con `npm ci` y Fluid Compute activado para que un preset anterior del proyecto no convierta el servidor local en la entrada del despliegue.
 3. La raíz debe ser la carpeta que contiene `package.json`, `api/` y `vercel.json`.
 4. Selecciona Node.js **22.x**; `package.json` ya fija esa versión.
 5. Deja el comando de build vacío, porque no hay frontend que compilar. El Output Directory es `public`, configurado en `vercel.json`. El Install Command puede ser `npm ci`.
@@ -306,6 +307,8 @@ Se valida el formato del símbolo antes de guardarlo. La disponibilidad real del
 ## Deduplicación y concurrencia
 
 La señal incluye símbolo, timeframe, nombre del patrón y momento de cierre de la vela de confirmación, no la hora de ejecución del servidor. Las alertas muestran fecha y hora UTC.
+
+La vigencia por defecto es de **2 velas**: 10 minutos para `5m`, 2 horas para `1h` y 2 días para `1d`. `1M` utiliza meses naturales UTC. Se compara el cierre de confirmación con la hora real de envío, no solo con la última vela recibida: los datos retrasados también caducan. Una señal justo en el límite todavía es válida; pasado el límite se omite antes de reservarla o enviarla. El resultado del scan incluye `expired` con el número de señales caducadas. Cambiar `MAX_SIGNAL_AGE_CANDLES` requiere reiniciar localmente o redesplegar en Vercel; no modifica los valores persistidos en Redis. El Cron diario con `5m` solo podrá alertar sobre confirmaciones que sigan vigentes en el momento de esa ejecución.
 
 La reserva de señal y el cooldown son atómicos en Redis. Una señal se conserva 90 días; además queda una marca permanente de la última confirmación por activo/timeframe/patrón para impedir reenviar señales iguales o anteriores cuando expiren las claves temporales. El cooldown de una hora también bloquea señales diferentes del mismo grupo. Las señales bloqueadas por cooldown podrán enviarse en otro scan si siguen siendo la confirmación seleccionada.
 
